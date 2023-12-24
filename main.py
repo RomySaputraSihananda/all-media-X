@@ -1,10 +1,19 @@
 import requests
 from json import dumps
 
+def ubah_format_link(link, format_tujuan="jpg"):
+    ekstensi_asli = link.split(".")[-1]
+    return link.replace(f".{ekstensi_asli}", f"?format={ekstensi_asli}&name=4096x4096") if ekstensi_asli else link
+
+def download(link):
+    with open(f'data/{link.split("/")[-1]}', 'wb') as file:
+        file.write(requests.get(ubah_format_link(link)).content)
+
 params = {
     "variables": dumps({
-        "userId": "1057844081315897344",
-        "count":20,
+        # "userId": "4722555409",
+        "userId": "1572207728415895559",
+        "count":200,
         "includePromotedContent":True,
         "withQuickPromoteEligibilityTweetFields":True,
         "withVoice":True,
@@ -36,23 +45,34 @@ params = {
 }
 
 headers = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; rv:109.0) Gecko/20100101 Firefox/118.0",
-    "Accept": "*/*",
-    "Accept-Language": "en-US,en;q=0.5",
-    "content-type": "application/json",
-    "x-guest-token": "1738559611849023890",
-    "x-twitter-client-language": "en",
-    "x-twitter-active-user": "yes",
-    "x-client-transaction-id": "2S/JMTMO6gYovw3reLcNsIf6dpc0j5QEQ2fYtFwJJ7Kar/Zik27fZ35/uapLJv/b4ptR7thUDFEkZBZqqv3zQmiwDBMI2A",
-    "Sec-Fetch-Dest": "empty",
-    "Sec-Fetch-Mode": "cors",
-    "Sec-Fetch-Site": "same-site",
+    "User-Agent": "Mozilla/5.0 (Linux; Android 13; SAMSUNG SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/21.0 Chrome/110.0.5481.154 Mobile Safari/537.36", 
+    "x-guest-token": "1738834257072771466", 
     "authorization": "Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA",
 }
 
-res = requests.get('https://api.twitter.com/graphql/V1ze5q3ijDS1VeLwLY0m7g/UserTweets', params=params, headers=headers)
+data = requests.get('https://api.twitter.com/graphql/V1ze5q3ijDS1VeLwLY0m7g/UserTweets', params=params, headers=headers).json()
 
-print(res)
+# print(data)
 
 with open('data.json', 'w') as file:
-    file.write(dumps(res.json(), indent=2, ensure_ascii=False))
+    file.write(dumps(data, indent=2, ensure_ascii=False))
+
+datas = data['data']['user']['result']['timeline_v2']['timeline']['instructions'][-2]['entries']
+
+links = []
+
+for data2 in datas:
+    try:
+        for media in data2['content']['itemContent']['tweet_results']['result']['legacy']["entities"]['media']:
+            links.append(media['media_url_https'])
+
+    # print(data2['content']['itemContent']['tweet_results']['result']['legacy']["full_text"])
+    except Exception as e:
+        continue
+
+
+from concurrent.futures import ThreadPoolExecutor
+
+with ThreadPoolExecutor() as executor:
+    executor.map(download, links)
+
