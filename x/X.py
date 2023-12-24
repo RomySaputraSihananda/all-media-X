@@ -1,12 +1,13 @@
-from requests.sessions import Session
+import os
+
 from requests import Response
 from json import dumps
-from concurrent.futures import ThreadPoolExecutor
 
+from requests.sessions import Session
+from concurrent.futures import ThreadPoolExecutor
 class X:
     def __init__(self) -> None:
         self.__requests: Session = Session()
-
         self.__requests.headers.update({
             "User-Agent": "Mozilla/5.0 (Linux; Android 13; SAMSUNG SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/21.0 Chrome/110.0.5481.154 Mobile Safari/537.36", 
             "authorization": "Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA",
@@ -22,11 +23,16 @@ class X:
         })
     
     def __change_url(self, url: str):
-        ekstensi_asli = url.split(".")[-1]
-        return url.replace(f".{ekstensi_asli}", f"?format={ekstensi_asli}&name=4096x4096") if ekstensi_asli else url
+        ekstention: str = url.split(".")[-1]
+        return url.replace(f".{ekstention}", f"?format={ekstention}&name=4096x4096") if ekstention else url
 
     def __download(self, url: str):
-        with open(f'data2/{url.split("/")[-1]}', 'wb') as file:
+        output: str = f'data/{self.__username}'
+
+        if(not os.path.exists(output)):
+            os.makedirs(output)
+
+        with open(f'{output}/{url.split("/")[-1]}', 'wb') as file:
             file.write(self.__requests.get(self.__change_url(url)).content)
 
     def __get_user_id(self, username: str) -> str:
@@ -92,23 +98,26 @@ class X:
             })
         }
     
+    def __filter_urls(self, response: dict):
+        datas = response['data']['user']['result']['timeline_v2']['timeline']['instructions'][-2]['entries']
+
+        for data in datas:
+            try:
+                for media in data['content']['itemContent']['tweet_results']['result']['legacy']["entities"]['media']:
+                    self.__image_urls.append(media['media_url_https'])
+            except Exception as e:
+                continue
+    
     def start(self, username: str) -> None:
+        self.__image_urls: list = []
+        self.__username: str = username
 
         response: Response = self.__requests.get('https://api.twitter.com/graphql/V1ze5q3ijDS1VeLwLY0m7g/UserTweets', params=self.__build_params(username))
 
-        datas = response.json()['data']['user']['result']['timeline_v2']['timeline']['instructions'][-2]['entries']
-
-        links = []
-
-        for data2 in datas:
-            try:
-                for media in data2['content']['itemContent']['tweet_results']['result']['legacy']["entities"]['media']:
-                    links.append(media['media_url_https'])
-            except Exception as e:
-                continue
+        self.__filter_urls(response.json())
 
         with ThreadPoolExecutor() as executor:
-            executor.map(self.__download, links)
+            executor.map(self.__download, self.__image_urls)
 
 # testing
 if(__name__ == '__main__'):
