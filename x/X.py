@@ -5,6 +5,7 @@ from time import sleep
 from dotenv import load_dotenv
 from requests import Response
 from json import dumps
+from tqdm import tqdm
 
 from requests.sessions import Session
 from concurrent.futures import ThreadPoolExecutor
@@ -144,8 +145,17 @@ class X:
             print(response)
             if (self.__filter_urls(response.json())): break
 
-            with ThreadPoolExecutor() as executor:
-                executor.map(self.__download, self.__media_urls)
+            with tqdm(total=len(self.__media_urls), desc="Downloading", unit="file") as progress_bar:
+                def download_wrapper(url):
+                    result = self.__download(url)
+                    progress_bar.update(1)
+                    return result
+                
+                with ThreadPoolExecutor() as executor:
+                    downloaded_results = list(executor.map(download_wrapper, self.__media_urls))
+
+            # with ThreadPoolExecutor() as executor:
+            #     executor.map(self.__download, self.__media_urls)
             
             # if(not self.__cookie): break
             # sleep(5)
