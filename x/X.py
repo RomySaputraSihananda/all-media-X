@@ -1,16 +1,23 @@
 import os
+import re
 
+from dotenv import load_dotenv
 from requests import Response
 from json import dumps
 
 from requests.sessions import Session
 from concurrent.futures import ThreadPoolExecutor
 class X:
-    def __init__(self) -> None:
+    def __init__(self, cookie: str = None) -> None:
         self.__requests: Session = Session()
+
+        match = re.search(r'ct0=([^;]+)', cookie) if cookie else None
+
         self.__requests.headers.update({
             "User-Agent": "Mozilla/5.0 (Linux; Android 13; SAMSUNG SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/21.0 Chrome/110.0.5481.154 Mobile Safari/537.36", 
             "authorization": "Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA",
+            "Cookie": cookie,
+            "X-Csrf-Token": match.group(1) if match else None,
         })
 
         self.__get_guest_token()
@@ -99,7 +106,8 @@ class X:
         }
     
     def __filter_urls(self, response: dict):
-        datas = response['data']['user']['result']['timeline_v2']['timeline']['instructions'][-2]['entries']
+        datas = response['data']['user']['result']['timeline_v2']['timeline']
+        datas = next((i for i in datas['instructions'] if i['type'] == "TimelineAddEntries"), None)['entries'][:-2]
 
         for data in datas:
             try:
@@ -108,7 +116,18 @@ class X:
             except Exception as e:
                 continue
     
-    def start(self, username: str) -> None:
+    def get_by_username(self, username: str) -> None:
+        self.__image_urls: list = []
+        self.__username: str = username
+
+        response: Response = self.__requests.get('https://api.twitter.com/graphql/V1ze5q3ijDS1VeLwLY0m7g/UserTweets', params=self.__build_params(username))
+
+        self.__filter_urls(response.json())
+
+        with ThreadPoolExecutor() as executor:
+            executor.map(self.__download, self.__image_urls)
+    
+    def search(self, username: str) -> None:
         self.__image_urls: list = []
         self.__username: str = username
 
@@ -121,5 +140,8 @@ class X:
 
 # testing
 if(__name__ == '__main__'):
-    x: X = X() 
-    x.start('agv48')
+    load_dotenv() 
+    cookie = os.getenv("cookie") 
+    x: X = X(cookie) 
+    # x.get_by_username('amortentia0213')
+    x.get_by_username('agv48')
