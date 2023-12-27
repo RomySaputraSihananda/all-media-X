@@ -121,46 +121,45 @@ class X:
         
         if(self.__cookie): self.__cursor = next((entry['content']['value'] for entry in datas[-2:] if entry['content']['cursorType'] == "Bottom"), None)
 
-        for data in datas[:-2]:
+        for data in datas:
             try:
                 for media in data['content']['itemContent']['tweet_results']['result']['legacy']["entities"]['media']:
                     match(media["type"]):
                         case "photo":
-                            self.__image_urls.append(media['media_url_https'])
+                            self.__media_urls.append(media['media_url_https'])
                         case "video":
                             bitrate_variants = [variant for variant in media['video_info']['variants'] if "bitrate" in variant]
                             video = max(bitrate_variants, key=lambda x: x["bitrate"])
-                            self.__image_urls.append(video['url'])
+                            self.__media_urls.append(video['url'])
             except Exception as e:
                 continue
     
     def get_by_username(self, username: str) -> None:
         self.__username: str = username
         while(True):
-            self.__image_urls: list = []
+            self.__media_urls: list = []
 
             response: Response = self.__requests.get('https://api.twitter.com/graphql/V1ze5q3ijDS1VeLwLY0m7g/UserTweets', params=self.__build_params(username))
             
             print(response)
             if (self.__filter_urls(response.json())): break
 
-
             with ThreadPoolExecutor() as executor:
-                executor.map(self.__download, self.__image_urls)
+                executor.map(self.__download, self.__media_urls)
             
-            if(not self.__cookie): break
+            # if(not self.__cookie): break
             # sleep(5)
         executor.shutdown(wait=True)
     
     def search(self, username: str) -> None:
-        self.__image_urls: list = []
+        self.__media_urls: list = []
         self.__username: str = username
 
         response: Response = self.__requests.get('https://api.twitter.com/graphql/V1ze5q3ijDS1VeLwLY0m7g/UserTweets', params=self.__build_params(username))
 
 
         with ThreadPoolExecutor() as executor:
-            executor.map(self.__download, self.__image_urls)
+            executor.map(self.__download, self.__media_urls)
 
 # testing
 if(__name__ == '__main__'):
