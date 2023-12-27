@@ -10,6 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 class X:
     def __init__(self, cookie: str = None) -> None:
         self.__requests: Session = Session()
+        self.__cursor: str = None
 
         match = re.search(r'ct0=([^;]+)', cookie) if cookie else None
 
@@ -30,6 +31,8 @@ class X:
         })
     
     def __change_url(self, url: str):
+        if('.mp4' in url): return url
+
         ekstention: str = url.split(".")[-1]
         return url.replace(f".{ekstention}", f"?format={ekstention}&name=4096x4096") if ekstention else url
 
@@ -39,7 +42,7 @@ class X:
         if(not os.path.exists(output)):
             os.makedirs(output)
 
-        with open(f'{output}/{url.split("/")[-1]}', 'wb') as file:
+        with open(f'{output}/{url.split("/")[-1].split("?")[0] if ".mp4" in url else url.split("/")[-1]}', 'wb') as file:
             file.write(self.__requests.get(self.__change_url(url)).content)
 
     def __get_user_id(self, username: str) -> str:
@@ -75,6 +78,7 @@ class X:
             "variables": dumps({
                 "userId": self.__get_user_id(username),
                 "count":200,
+                "cursor": self.__cursor,
                 "includePromotedContent":True,
                 "withQuickPromoteEligibilityTweetFields":True,
                 "withVoice":True,
@@ -107,25 +111,34 @@ class X:
     
     def __filter_urls(self, response: dict):
         datas = response['data']['user']['result']['timeline_v2']['timeline']
-        datas = next((i for i in datas['instructions'] if i['type'] == "TimelineAddEntries"), None)['entries'][:-2]
+        datas = next((instruction for instruction in datas['instructions'] if instruction['type'] == "TimelineAddEntries"), None)['entries']
 
-        for data in datas:
+        self.__cursor = next((entry['content']['value'] for entry in datas[-2:] if entry['content']['cursorType'] == "Bottom"), None)
+
+        for data in datas[:-2]:
             try:
                 for media in data['content']['itemContent']['tweet_results']['result']['legacy']["entities"]['media']:
-                    self.__image_urls.append(media['media_url_https'])
+                    match(media["type"]):
+                        case "photo":
+                            self.__image_urls.append(media['media_url_https'])
+                        case "video":
+                            bitrate_variants = [variant for variant in media['video_info']['variants'] if "bitrate" in variant]
+                            video = max(bitrate_variants, key=lambda x: x["bitrate"])
+                            self.__image_urls.append(video['url'])
             except Exception as e:
                 continue
     
     def get_by_username(self, username: str) -> None:
-        self.__image_urls: list = []
         self.__username: str = username
+        for i in range(5):
+            self.__image_urls: list = []
 
-        response: Response = self.__requests.get('https://api.twitter.com/graphql/V1ze5q3ijDS1VeLwLY0m7g/UserTweets', params=self.__build_params(username))
+            response: Response = self.__requests.get('https://api.twitter.com/graphql/V1ze5q3ijDS1VeLwLY0m7g/UserTweets', params=self.__build_params(username))
 
-        self.__filter_urls(response.json())
+            self.__filter_urls(response.json())
 
-        with ThreadPoolExecutor() as executor:
-            executor.map(self.__download, self.__image_urls)
+            with ThreadPoolExecutor() as executor:
+                executor.map(self.__download, self.__image_urls)
     
     def search(self, username: str) -> None:
         self.__image_urls: list = []
@@ -144,4 +157,4 @@ if(__name__ == '__main__'):
     cookie = os.getenv("cookie") 
     x: X = X(cookie) 
     # x.get_by_username('amortentia0213')
-    x.get_by_username('agv48')
+    x.get_by_username('RomySihananda')
