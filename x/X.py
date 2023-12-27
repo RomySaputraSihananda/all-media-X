@@ -12,13 +12,14 @@ class X:
     def __init__(self, cookie: str = None) -> None:
         self.__requests: Session = Session()
         self.__cursor: str = None
+        self.__cookie: str = cookie
 
         match = re.search(r'ct0=([^;]+)', cookie) if cookie else None
 
         self.__requests.headers.update({
             "User-Agent": "Mozilla/5.0 (Linux; Android 13; SAMSUNG SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/21.0 Chrome/110.0.5481.154 Mobile Safari/537.36", 
             "authorization": "Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA",
-            "Cookie": cookie,
+            "Cookie": self.__cookie,
             "X-Csrf-Token": match.group(1) if match else None,
         })
 
@@ -43,11 +44,10 @@ class X:
         if(not os.path.exists(output)):
             os.makedirs(output)
 
-
         with open(f'{output}/{url.split("/")[-1].split("?")[0] if ".mp4" in url else url.split("/")[-1]}', 'wb') as file:
             file.write(self.__requests.get(self.__change_url(url)).content)
 
-        print(f'{output}/{url.split("/")[-1].split("?")[0] if ".mp4" in url else url.split("/")[-1]}')
+        # print(f'{output}/{url.split("/")[-1].split("?")[0] if ".mp4" in url else url.split("/")[-1]}')
 
     def __get_user_id(self, username: str) -> str:
         params: dict = {
@@ -113,11 +113,13 @@ class X:
             })
         }
     
-    def __filter_urls(self, response: dict):
+    def __filter_urls(self, response: dict) -> bool:
         datas = response['data']['user']['result']['timeline_v2']['timeline']
         datas = next((instruction for instruction in datas['instructions'] if instruction['type'] == "TimelineAddEntries"), None)['entries']
 
-        self.__cursor = next((entry['content']['value'] for entry in datas[-2:] if entry['content']['cursorType'] == "Bottom"), None)
+        if(len(datas) == 2): return True 
+        
+        if(self.__cookie): self.__cursor = next((entry['content']['value'] for entry in datas[-2:] if entry['content']['cursorType'] == "Bottom"), None)
 
         for data in datas[:-2]:
             try:
@@ -134,19 +136,20 @@ class X:
     
     def get_by_username(self, username: str) -> None:
         self.__username: str = username
-        for i in range(10):
+        while(True):
             self.__image_urls: list = []
 
-            # response: Response = self.__requests.get('https://api.twitter.com/graphql/V1ze5q3ijDS1VeLwLY0m7g/UserTweets', params=self.__build_params(username))
-            response: Response = self.__requests.get('https://api.twitter.com/graphql/oMVVrI5kt3kOpyHHTTKf5Q/UserMedia', params=self.__build_params(username))
+            response: Response = self.__requests.get('https://api.twitter.com/graphql/V1ze5q3ijDS1VeLwLY0m7g/UserTweets', params=self.__build_params(username))
             
-            self.__filter_urls(response.json())
+            print(response)
+            if (self.__filter_urls(response.json())): break
+
 
             with ThreadPoolExecutor() as executor:
                 executor.map(self.__download, self.__image_urls)
             
-            print(f'[{i + 1}] {response}')
-            sleep(5)
+            if(not self.__cookie): break
+            # sleep(5)
         executor.shutdown(wait=True)
     
     def search(self, username: str) -> None:
@@ -155,7 +158,6 @@ class X:
 
         response: Response = self.__requests.get('https://api.twitter.com/graphql/V1ze5q3ijDS1VeLwLY0m7g/UserTweets', params=self.__build_params(username))
 
-        self.__filter_urls(response.json())
 
         with ThreadPoolExecutor() as executor:
             executor.map(self.__download, self.__image_urls)
@@ -164,7 +166,8 @@ class X:
 if(__name__ == '__main__'):
     load_dotenv() 
     cookie = os.getenv("cookie") 
-    x: X = X(cookie) 
+    x: X = X() 
     # x.get_by_username('amortentia0213')
     # x.get_by_username('djtHobbies')
-    x.get_by_username('Freya_JKT48')
+    # x.get_by_username('Freya_JKT48')
+    x.get_by_username('sixtysixhistory')
