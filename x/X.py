@@ -1,5 +1,6 @@
 import os
 import re
+from time import sleep
 
 from dotenv import load_dotenv
 from requests import Response
@@ -42,8 +43,11 @@ class X:
         if(not os.path.exists(output)):
             os.makedirs(output)
 
+
         with open(f'{output}/{url.split("/")[-1].split("?")[0] if ".mp4" in url else url.split("/")[-1]}', 'wb') as file:
             file.write(self.__requests.get(self.__change_url(url)).content)
+
+        print(f'{output}/{url.split("/")[-1].split("?")[0] if ".mp4" in url else url.split("/")[-1]}')
 
     def __get_user_id(self, username: str) -> str:
         params: dict = {
@@ -130,15 +134,20 @@ class X:
     
     def get_by_username(self, username: str) -> None:
         self.__username: str = username
-        for i in range(5):
+        for i in range(10):
             self.__image_urls: list = []
 
-            response: Response = self.__requests.get('https://api.twitter.com/graphql/V1ze5q3ijDS1VeLwLY0m7g/UserTweets', params=self.__build_params(username))
-
+            # response: Response = self.__requests.get('https://api.twitter.com/graphql/V1ze5q3ijDS1VeLwLY0m7g/UserTweets', params=self.__build_params(username))
+            response: Response = self.__requests.get('https://api.twitter.com/graphql/oMVVrI5kt3kOpyHHTTKf5Q/UserMedia', params=self.__build_params(username))
+            
             self.__filter_urls(response.json())
 
             with ThreadPoolExecutor() as executor:
                 executor.map(self.__download, self.__image_urls)
+            
+            print(f'[{i + 1}] {response}')
+            sleep(5)
+        executor.shutdown(wait=True)
     
     def search(self, username: str) -> None:
         self.__image_urls: list = []
@@ -157,4 +166,5 @@ if(__name__ == '__main__'):
     cookie = os.getenv("cookie") 
     x: X = X(cookie) 
     # x.get_by_username('amortentia0213')
-    x.get_by_username('RomySihananda')
+    # x.get_by_username('djtHobbies')
+    x.get_by_username('Freya_JKT48')
