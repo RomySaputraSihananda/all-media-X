@@ -157,12 +157,12 @@ class X:
                         for media in data['item']['itemContent']['tweet_results']['result']['legacy']["entities"]['media']:
                             match(media["type"]):
                                 case "photo":
-                                    print(media['media_url_https'])
+                                    self.__media_urls.append(media['media_url_https'])
                                 case "video":
                                     bitrate_variants = [variant for variant in media['video_info']['variants'] if "bitrate" in variant]
                                     video = max(bitrate_variants, key=lambda x: x["bitrate"])
 
-                                    print(video['url'])
+                                    self.__media_urls.append(video['url'])
 
                 except Exception as e:
                     datas = next((i for i in datas['instructions'] if i['type'] == "TimelineAddEntries"), None)['entries']
@@ -175,12 +175,13 @@ class X:
                         for media in data['item']['itemContent']['tweet_results']['result']['legacy']["entities"]['media']:
                             match(media["type"]):
                                 case "photo":
-                                    print(media['media_url_https'])
+                                    self.__media_urls.append(media['media_url_https'])
                                 case "video":
                                     bitrate_variants = [variant for variant in media['video_info']['variants'] if "bitrate" in variant]
                                     video = max(bitrate_variants, key=lambda x: x["bitrate"])
 
-                                    print(video['url'])
+                                    self.__media_urls.append(video['url'])
+
 
 
                 # for data in datas[-2:]
