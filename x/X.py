@@ -78,17 +78,25 @@ class X:
         
         return response.json()['data']['user']['result']['rest_id']
 
-    def __build_params(self) -> dict:
+    def __build_params(self, **kwargs) -> dict:
+        variable: dict = {
+            "rawQuery": self.__username,
+            "count": 20,
+            "cursor": self.__cursor,
+            "querySource":"typed_query",
+            "product":"Media"
+        } if kwargs.get("search", False) else {
+            "userId": self.__get_user_id(),
+            "count":20,
+            "cursor": self.__cursor,
+            "includePromotedContent":True,
+            "withQuickPromoteEligibilityTweetFields":True,
+            "withVoice":True,
+            "withV2Timeline":True
+        }
+        
         return {
-            "variables": dumps({
-                "userId": self.__get_user_id(),
-                "count":200,
-                "cursor": self.__cursor,
-                "includePromotedContent":True,
-                "withQuickPromoteEligibilityTweetFields":True,
-                "withVoice":True,
-                "withV2Timeline":True
-            }),
+            "variables": dumps(variable),
             "features": dumps({
                 "responsive_web_graphql_exclude_directive_enabled":True,
                 "verified_phone_label_enabled":False,
@@ -115,25 +123,94 @@ class X:
         }
     
     def __filter_urls(self, response: dict) -> bool:
-        datas = response['data']['user']['result']['timeline_v2']['timeline']
-        datas = next((instruction for instruction in datas['instructions'] if instruction['type'] == "TimelineAddEntries"), None)['entries']
-
-        if(len(datas) == 2): return True 
-        
-        if(self.__cookie): self.__cursor = next((entry['content']['value'] for entry in datas[-2:] if entry['content']['cursorType'] == "Bottom"), None)
-
-        for data in datas:
+        if('user' in response['data']):
             try:
-                for media in data['content']['itemContent']['tweet_results']['result']['legacy']["entities"]['media']:
-                    match(media["type"]):
-                        case "photo":
-                            self.__media_urls.append(media['media_url_https'])
-                        case "video":
-                            bitrate_variants = [variant for variant in media['video_info']['variants'] if "bitrate" in variant]
-                            video = max(bitrate_variants, key=lambda x: x["bitrate"])
-                            self.__media_urls.append(video['url'])
+                datas = response['data']['user']['result']['timeline_v2']['timeline']
+                datas = next((instruction for instruction in datas['instructions'] if instruction['type'] == "TimelineAddEntries"), None)['entries']
+
+                if(len(datas) == 2): raise Exception(e)
+                
+                if(self.__cookie): self.__cursor = next((entry['content']['value'] for entry in datas[-2:] if entry['content']['cursorType'] == "Bottom"), None)
+
+                for data in datas:
+                    try:
+                        medias = data['content']['itemContent']['tweet_results']['result']['legacy']["entities"]['media']
+                    except Exception as e:
+                        raise Exception(e)
+                    
+                    for media in medias:
+                        match(media["type"]):
+                            case "photo":
+                                self.__media_urls.append(media['media_url_https'])
+                            case "video":
+                                bitrate_variants = [variant for variant in media['video_info']['variants'] if "bitrate" in variant]
+                                video = max(bitrate_variants, key=lambda x: x["bitrate"])
+                                self.__media_urls.append(video['url'])
+
             except Exception as e:
-                continue
+                datas = response['data']['user']['result']['timeline_v2']['timeline']
+                try:
+                    self.__cursor = next((entry['content']['value'] for entry in next((i for i in datas['instructions'] if i['type'] == "TimelineAddEntries"), None)['entries'][1:] if entry['content']['cursorType'] == "Bottom"), None)
+                    datas = next((i for i in datas['instructions'] if i['type'] == "TimelineAddToModule"), None)['moduleItems']
+                    
+                    for data in datas:
+                        for media in data['item']['itemContent']['tweet_results']['result']['legacy']["entities"]['media']:
+                            match(media["type"]):
+                                case "photo":
+                                    print(media['media_url_https'])
+                                case "video":
+                                    bitrate_variants = [variant for variant in media['video_info']['variants'] if "bitrate" in variant]
+                                    video = max(bitrate_variants, key=lambda x: x["bitrate"])
+
+                                    print(video['url'])
+
+                except Exception as e:
+                    datas = next((i for i in datas['instructions'] if i['type'] == "TimelineAddEntries"), None)['entries']
+
+                    if(len(datas) == 2): return True
+                    
+                    self.__cursor = next((entry['content']['value'] for entry in datas[1:] if entry['content']['cursorType'] == "Bottom"), None)
+                    
+                    for data in datas[0]['content']['items']:
+                        for media in data['item']['itemContent']['tweet_results']['result']['legacy']["entities"]['media']:
+                            match(media["type"]):
+                                case "photo":
+                                    print(media['media_url_https'])
+                                case "video":
+                                    bitrate_variants = [variant for variant in media['video_info']['variants'] if "bitrate" in variant]
+                                    video = max(bitrate_variants, key=lambda x: x["bitrate"])
+
+                                    print(video['url'])
+
+
+                # for data in datas[-2:]
+                
+            return
+        
+        datas = response['data']['search_by_raw_query']['search_timeline']['timeline']
+        datas = next((i for i in datas['instructions'] if i['type'] == "TimelineAddEntries"), None)['entries']
+
+        # print(len(datas))
+        # for data in datas:
+        #     print(data['entryId'])
+
+        self.__cursor = next((entry['content']['value'] for entry in datas[1:] if entry['content']['cursorType'] == "Bottom"), None)
+        # return
+
+        
+        # print(self.__cursor)
+
+        for data in datas[0]['content']['items']:
+            for media in data['item']['itemContent']['tweet_results']['result']['legacy']["entities"]['media']:
+                match(media["type"]):
+                    case "photo":
+                        print(media['media_url_https'])
+                        # pass
+                    case "video":
+                        bitrate_variants = [variant for variant in media['video_info']['variants'] if "bitrate" in variant]
+                        video = max(bitrate_variants, key=lambda x: x["bitrate"])
+
+                        print(video['url'])
     
     def __download_wrapper(self, url: str, progress_bar: tqdm) -> None:
         self.__download(url)
@@ -141,20 +218,36 @@ class X:
 
     def get_by_username(self, username: str) -> None:
         self.__username: str = username
-        while(True):
+
+        if(not self.__cookie):
             self.__media_urls: list = []
 
             response: Response = self.__requests.get('https://api.twitter.com/graphql/V1ze5q3ijDS1VeLwLY0m7g/UserTweets', params=self.__build_params())
             
-            if (self.__filter_urls(response.json()) or response.status_code != 200): break
+            if (self.__filter_urls(response.json()) or response.status_code != 200): return
             
-            print(response)
+            logging.info(response)
 
             with tqdm(total=len(self.__media_urls), desc="Downloading", unit="file", ascii=True) as progress_bar:                
                 with ThreadPoolExecutor() as executor:
                     executor.map(lambda url: self.__download_wrapper(url, progress_bar), self.__media_urls)
             
-            if(not self.__cookie): break
+            executor.shutdown(wait=True)
+            
+            return
+        
+        while(True):
+            self.__media_urls: list = []
+
+            response: Response = self.__requests.get('https://api.twitter.com/graphql/oMVVrI5kt3kOpyHHTTKf5Q/UserMedia', params=self.__build_params())
+            
+            logging.info(response)
+
+            if (self.__filter_urls(response.json()) or response.status_code != 200): break
+            
+            with tqdm(total=len(self.__media_urls), desc="Downloading", unit="file", ascii=True) as progress_bar:                
+                with ThreadPoolExecutor() as executor:
+                    executor.map(lambda url: self.__download_wrapper(url, progress_bar), self.__media_urls)
 
         executor.shutdown(wait=True)
     
@@ -162,31 +255,33 @@ class X:
         self.__username: str = username
         
         if(not self.__cookie): return logging.error("cookie require !!")
-        
+
         while(True):
             self.__media_urls: list = []
 
-            response: Response = self.__requests.get('https://api.twitter.com/graphql/V1ze5q3ijDS1VeLwLY0m7g/UserTweets', params=self.__build_params())
+            response: Response = self.__requests.get('https://api.twitter.com/graphql/Aj1nGkALq99Xg3XI0OZBtw/SearchTimeline', params=self.__build_params(search=True))
             
-            if (self.__filter_urls(response.json()) or response.status_code != 200): break
-            
+            if (response.status_code != 200): break
+
             print(response)
 
-            with tqdm(total=len(self.__media_urls), desc="Downloading", unit="file", ascii=True) as progress_bar:                
-                with ThreadPoolExecutor() as executor:
-                    executor.map(lambda url: self.__download_wrapper(url, progress_bar), self.__media_urls)
+            self.__filter_urls(response.json())
+
+        #     with tqdm(total=len(self.__media_urls), desc="Downloading", unit="file", ascii=True) as progress_bar:                
+        #         with ThreadPoolExecutor() as executor:
+        #             executor.map(lambda url: self.__download_wrapper(url, progress_bar), self.__media_urls)
             
-        executor.shutdown(wait=True)
+        # executor.shutdown(wait=True)
 
 # testing
 if(__name__ == '__main__'):
     load_dotenv() 
     cookie = os.getenv("cookie") 
     start = perf_counter()
-    x: X = X() 
+    x: X = X(cookie)
     # x.get_by_username('amortentia0213')
-    # x.get_by_username('djtHobbies')
-    x.search('Freya_JKT48')
+    x.get_by_username('djtHobbies')
+    # x.search('Freya_JKT48')
     # x.get_by_username('sixtysixhistory')
     # x.get_by_username('RomySihananda')
     print(perf_counter() - start)
