@@ -1,7 +1,7 @@
 import os
 import re
-from time import sleep
 
+from time import perf_counter
 from dotenv import load_dotenv
 from requests import Response
 from json import dumps
@@ -9,6 +9,8 @@ from tqdm import tqdm
 
 from requests.sessions import Session
 from concurrent.futures import ThreadPoolExecutor
+from x.helpers import logging
+
 class X:
     def __init__(self, cookie: str = None) -> None:
         self.__requests: Session = Session()
@@ -48,12 +50,10 @@ class X:
         with open(f'{output}/{url.split("/")[-1].split("?")[0] if ".mp4" in url else url.split("/")[-1]}', 'wb') as file:
             file.write(self.__requests.get(self.__change_url(url)).content)
 
-        # print(f'{output}/{url.split("/")[-1].split("?")[0] if ".mp4" in url else url.split("/")[-1]}')
-
-    def __get_user_id(self, username: str) -> str:
+    def __get_user_id(self) -> str:
         params: dict = {
             "variables": dumps({
-                "screen_name": username,
+                "screen_name": self.__username,
                 "withSafetyModeUserFields":True
             }),
             "features": dumps({
@@ -78,10 +78,10 @@ class X:
         
         return response.json()['data']['user']['result']['rest_id']
 
-    def __build_params(self, username: str) -> dict:
+    def __build_params(self) -> dict:
         return {
             "variables": dumps({
-                "userId": self.__get_user_id(username),
+                "userId": self.__get_user_id(),
                 "count":200,
                 "cursor": self.__cursor,
                 "includePromotedContent":True,
@@ -135,48 +135,58 @@ class X:
             except Exception as e:
                 continue
     
+    def __download_wrapper(self, url: str, progress_bar: tqdm) -> None:
+        self.__download(url)
+        progress_bar.update(1)
+
     def get_by_username(self, username: str) -> None:
         self.__username: str = username
         while(True):
             self.__media_urls: list = []
 
-            response: Response = self.__requests.get('https://api.twitter.com/graphql/V1ze5q3ijDS1VeLwLY0m7g/UserTweets', params=self.__build_params(username))
+            response: Response = self.__requests.get('https://api.twitter.com/graphql/V1ze5q3ijDS1VeLwLY0m7g/UserTweets', params=self.__build_params())
+            
+            if (self.__filter_urls(response.json()) or response.status_code != 200): break
             
             print(response)
-            if (self.__filter_urls(response.json())): break
 
-            with tqdm(total=len(self.__media_urls), desc="Downloading", unit="file") as progress_bar:
-                def download_wrapper(url):
-                    result = self.__download(url)
-                    progress_bar.update(1)
-                    return result
-                
+            with tqdm(total=len(self.__media_urls), desc="Downloading", unit="file", ascii=True) as progress_bar:                
                 with ThreadPoolExecutor() as executor:
-                    downloaded_results = list(executor.map(download_wrapper, self.__media_urls))
-
-            # with ThreadPoolExecutor() as executor:
-            #     executor.map(self.__download, self.__media_urls)
+                    executor.map(lambda url: self.__download_wrapper(url, progress_bar), self.__media_urls)
             
-            # if(not self.__cookie): break
-            # sleep(5)
+            if(not self.__cookie): break
+
         executor.shutdown(wait=True)
     
     def search(self, username: str) -> None:
-        self.__media_urls: list = []
         self.__username: str = username
+        
+        if(not self.__cookie): return logging.error("cookie require !!")
+        
+        while(True):
+            self.__media_urls: list = []
 
-        response: Response = self.__requests.get('https://api.twitter.com/graphql/V1ze5q3ijDS1VeLwLY0m7g/UserTweets', params=self.__build_params(username))
+            response: Response = self.__requests.get('https://api.twitter.com/graphql/V1ze5q3ijDS1VeLwLY0m7g/UserTweets', params=self.__build_params())
+            
+            if (self.__filter_urls(response.json()) or response.status_code != 200): break
+            
+            print(response)
 
-
-        with ThreadPoolExecutor() as executor:
-            executor.map(self.__download, self.__media_urls)
+            with tqdm(total=len(self.__media_urls), desc="Downloading", unit="file", ascii=True) as progress_bar:                
+                with ThreadPoolExecutor() as executor:
+                    executor.map(lambda url: self.__download_wrapper(url, progress_bar), self.__media_urls)
+            
+        executor.shutdown(wait=True)
 
 # testing
 if(__name__ == '__main__'):
     load_dotenv() 
     cookie = os.getenv("cookie") 
+    start = perf_counter()
     x: X = X() 
     # x.get_by_username('amortentia0213')
     # x.get_by_username('djtHobbies')
-    # x.get_by_username('Freya_JKT48')
-    x.get_by_username('sixtysixhistory')
+    x.search('Freya_JKT48')
+    # x.get_by_username('sixtysixhistory')
+    # x.get_by_username('RomySihananda')
+    print(perf_counter() - start)
