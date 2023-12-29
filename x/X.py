@@ -81,13 +81,14 @@ class X:
     def __build_params(self, **kwargs) -> dict:
         variable: dict = {
             "rawQuery": self.__username,
-            "count": 20,
+            "count": 200,
             "cursor": self.__cursor,
             "querySource":"typed_query",
             "product":"Media"
         } if kwargs.get("search", False) else {
             "userId": self.__get_user_id(),
-            "count":20,
+            "count":200,
+            # "cursor": 'DAACCgACGCfyzBdAJxAKAAMYJ_LMFz_Y8AgABAAAAAILAAUAAAO8QUFBQUFDNk5zd2dBQUFESUFBQUFBQUFBRlh3QUFBQUhBQUFBVnJOQUZBWmdBaFlBTWdFQUFsQUE0QUJqU0NNSXFRdEFKQmtFZ2dNQWh4WkFRRUFBUlFNQ0NBUUFKQVdhQ0dLYlFBUUZTZ0FnZ1FBQU5DQUFCQU1RUU1TREFJSU1NUTRNdEFCQUlVQklFaEFCZUVBZ0VDQkFBUUFEUkJFRERDQUNnQUFNSUJNb0tBQUFRTUFCTkFKb0N5SkdDUUlBQkRBSVNoQ0NRQUFFUVpCQUlRQUVBd2dJMEFhQkV3UVlBSVNFUUFaaEZqNEFRWVprUkVRQUNJSUlBQUNnRWdzSU9pSUlFRktnQ2lnQ0VBQ0lBQkFRVUlDaGVzSW9ERUFRY0xIQmdxZ1FCYzBBQWdCT0FHaEFVeEJFQXJFS0lZSUlvQmxFUndnSUFFUUpBQkFGSUlBa0lRSUJBTUJENEJoZ0lCQUIyZ0RBUUFBQVVBUUFtaEVBaEFKQUtKUUFVQkF5SUdFQVFMUndZRjBGRUFBaEVNQUJ3UVFNUU1BS1FBRGdJU2k1WUFJZ0lsQUVBZ1F4RWhFUW1rb2dRZ2dBQWdBUUFBaEVpZ0VoQ2dRUU5nQUdZY0FCUUFNb0RiUUFEdGdFR0FBVEsyRUFRQ0trQklJQkFKcUVDVFFFQUVBRFpCQUlnTURBQ1N3dUJCN0NFTW9LQUFrSVhBSU9BQUFKVGtoRkFhVkFnb3dSQVlFb29tQ29TSUFFQWdBRE1KTEFnc0FCSlVnQW9VQkFnS0NrQWFDbkxCTWdFWUNCZ2lFUUFBQkVCUlFEUUFBSkdva2tBQ0FJRzlFaUlBc1NLZ3NDbUFRQUNDQUVJQUJBWUNJRUlzSVFBaENBVGlBcVRBUks3MkFsQUFQUkFoWUlKQUZBcklVQXNRQWtnSWdBQUVnQ0FrQUNnaUFFTVJVbGdCQ2RBQ2dBS0FKRUdCSkFBTUFTQUlBeUlDZ0lFM0JqRkNvSTRDRkJrWUFnU0djRUtBTXpTTUFRUVFHTU1BQkNPQnVJUWdFQkFpQXlJSUFrQkFBQmI2WVZTcEFCQndJQUV3amdpQUNBQkFuZ09BQ0pJZGdtQXBHMFJBS21Jb0hRQk1NQUVFZ1lBRUVBRE9nUXdKWUVDQUFFSWdoR0VEQ0dMT0FFNFZaZ0FBTW9paUErRkF3UUVtSUVEQ2dBQVJCQUFCQVVNVE1HQkFRS0ZKZ0lDQ1JSc0lBU2dnTUFoQ0VBQkVBQUNGQUJBcEFBeUJBSUFJRT0IAAYAAAAACAAHAAAAAAAA',
             "cursor": self.__cursor,
             "includePromotedContent":True,
             "withQuickPromoteEligibilityTweetFields":True,
@@ -181,37 +182,64 @@ class X:
                                     video = max(bitrate_variants, key=lambda x: x["bitrate"])
 
                                     self.__media_urls.append(video['url'])
-
-
-
-                # for data in datas[-2:]
                 
             return
         
         datas = response['data']['search_by_raw_query']['search_timeline']['timeline']
-        datas = next((i for i in datas['instructions'] if i['type'] == "TimelineAddEntries"), None)['entries']
 
-        # print(len(datas))
-        # for data in datas:
-        #     print(data['entryId'])
+        try:
+            self.__cursor = next((entry['content']['value'] for entry in next((i for i in datas['instructions'] if i['type'] == "TimelineAddEntries"), None)['entries'][1:] if entry['content']['cursorType'] == "Bottom"), None)
+            datas = next((i for i in datas['instructions'] if i['type'] == "TimelineAddToModule"), None)['moduleItems']
+            for data in datas:
+                try:
+                    for media in data['item']['itemContent']['tweet_results']['result']['legacy']["entities"]['media']:
+                        match(media["type"]):
+                            case "photo":
+                                self.__media_urls.append(media['media_url_https'])
+                            case "video":
+                                bitrate_variants = [variant for variant in media['video_info']['variants'] if "bitrate" in variant]
+                                video = max(bitrate_variants, key=lambda x: x["bitrate"])
 
-        self.__cursor = next((entry['content']['value'] for entry in datas[1:] if entry['content']['cursorType'] == "Bottom"), None)
-        # return
+                                self.__media_urls.append(video['url'])
+                except Exception as e:
+                    for media in data['item']['itemContent']['tweet_results']['result']['tweet']['legacy']["entities"]['media']:
+                        match(media["type"]):
+                            case "photo":
+                                self.__media_urls.append(media['media_url_https'])
+                            case "video":
+                                bitrate_variants = [variant for variant in media['video_info']['variants'] if "bitrate" in variant]
+                                video = max(bitrate_variants, key=lambda x: x["bitrate"])
 
-        
-        # print(self.__cursor)
+                                self.__media_urls.append(video['url'])
 
-        for data in datas[0]['content']['items']:
-            for media in data['item']['itemContent']['tweet_results']['result']['legacy']["entities"]['media']:
-                match(media["type"]):
-                    case "photo":
-                        print(media['media_url_https'])
-                        # pass
-                    case "video":
-                        bitrate_variants = [variant for variant in media['video_info']['variants'] if "bitrate" in variant]
-                        video = max(bitrate_variants, key=lambda x: x["bitrate"])
+        except Exception as e:
+            datas = next((i for i in datas['instructions'] if i['type'] == "TimelineAddEntries"), None)['entries']
 
-                        print(video['url'])
+            if(len(datas) == 2): return True
+
+            self.__cursor = next((entry['content']['value'] for entry in datas[1:] if entry['content']['cursorType'] == "Bottom"), None)
+
+            for data in datas[0]['content']['items']:
+                try:
+                    for media in data['item']['itemContent']['tweet_results']['result']['legacy']["entities"]['media']:
+                        match(media["type"]):
+                            case "photo":
+                                self.__media_urls.append(media['media_url_https'])
+                            case "video":
+                                bitrate_variants = [variant for variant in media['video_info']['variants'] if "bitrate" in variant]
+                                video = max(bitrate_variants, key=lambda x: x["bitrate"])
+
+                                self.__media_urls.append(video['url'])
+                except Exception as e:
+                    for media in data['item']['itemContent']['tweet_results']['result']['tweet']['legacy']["entities"]['media']:
+                        match(media["type"]):
+                            case "photo":
+                                self.__media_urls.append(media['media_url_https'])
+                            case "video":
+                                bitrate_variants = [variant for variant in media['video_info']['variants'] if "bitrate" in variant]
+                                video = max(bitrate_variants, key=lambda x: x["bitrate"])
+
+                                self.__media_urls.append(video['url'])
     
     def __download_wrapper(self, url: str, progress_bar: tqdm) -> None:
         self.__download(url)
@@ -242,9 +270,9 @@ class X:
 
             response: Response = self.__requests.get('https://api.twitter.com/graphql/oMVVrI5kt3kOpyHHTTKf5Q/UserMedia', params=self.__build_params())
             
-            logging.info(response)
-
             if (self.__filter_urls(response.json()) or response.status_code != 200): break
+            
+            logging.info(response)
             
             with tqdm(total=len(self.__media_urls), desc="Downloading", unit="file", ascii=True) as progress_bar:                
                 with ThreadPoolExecutor() as executor:
@@ -262,17 +290,13 @@ class X:
 
             response: Response = self.__requests.get('https://api.twitter.com/graphql/Aj1nGkALq99Xg3XI0OZBtw/SearchTimeline', params=self.__build_params(search=True))
             
-            if (response.status_code != 200): break
+            if (self.__filter_urls(response.json()) or response.status_code != 200): break
 
-            print(response)
-
-            self.__filter_urls(response.json())
-
-        #     with tqdm(total=len(self.__media_urls), desc="Downloading", unit="file", ascii=True) as progress_bar:                
-        #         with ThreadPoolExecutor() as executor:
-        #             executor.map(lambda url: self.__download_wrapper(url, progress_bar), self.__media_urls)
+            with tqdm(total=len(self.__media_urls), desc="Downloading", unit="file", ascii=True) as progress_bar:                
+                with ThreadPoolExecutor() as executor:
+                    executor.map(lambda url: self.__download_wrapper(url, progress_bar), self.__media_urls)
             
-        # executor.shutdown(wait=True)
+        executor.shutdown(wait=True)
 
 # testing
 if(__name__ == '__main__'):
@@ -282,8 +306,8 @@ if(__name__ == '__main__'):
     x: X = X(cookie)
     # x.get_by_username('amortentia0213')
     # x.get_by_username('djtHobbies')
-    # x.search('Freya_JKT48')
+    x.search('Freya_JKT48')
     # x.get_by_username('sixtysixhistory')
     # x.get_by_username('Freya_JKT48')
-    x.get_by_username('N_ShaniJKT48')
+    # x.get_by_username('N_ShaniJKT48')
     print(perf_counter() - start)
