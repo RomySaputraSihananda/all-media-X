@@ -17,13 +17,11 @@ class X:
         self.__cursor: str = None
         self.__cookie: str = cookie
 
-        match = re.search(r'ct0=([^;]+)', cookie) if cookie else None
-
         self.__requests.headers.update({
             "User-Agent": "Mozilla/5.0 (Linux; Android 13; SAMSUNG SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/21.0 Chrome/110.0.5481.154 Mobile Safari/537.36", 
             "authorization": "Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA",
             "Cookie": self.__cookie,
-            "X-Csrf-Token": match.group(1) if match else None,
+            "X-Csrf-Token": match.group(1) if (match := re.search(r'ct0=([^;]+)', cookie) if cookie else None) else None,
         })
 
         self.__get_guest_token()
@@ -88,7 +86,6 @@ class X:
         } if kwargs.get("search", False) else {
             "userId": self.__get_user_id(),
             "count":200,
-            # "cursor": 'DAACCgACGCfyzBdAJxAKAAMYJ_LMFz_Y8AgABAAAAAILAAUAAAO8QUFBQUFDNk5zd2dBQUFESUFBQUFBQUFBRlh3QUFBQUhBQUFBVnJOQUZBWmdBaFlBTWdFQUFsQUE0QUJqU0NNSXFRdEFKQmtFZ2dNQWh4WkFRRUFBUlFNQ0NBUUFKQVdhQ0dLYlFBUUZTZ0FnZ1FBQU5DQUFCQU1RUU1TREFJSU1NUTRNdEFCQUlVQklFaEFCZUVBZ0VDQkFBUUFEUkJFRERDQUNnQUFNSUJNb0tBQUFRTUFCTkFKb0N5SkdDUUlBQkRBSVNoQ0NRQUFFUVpCQUlRQUVBd2dJMEFhQkV3UVlBSVNFUUFaaEZqNEFRWVprUkVRQUNJSUlBQUNnRWdzSU9pSUlFRktnQ2lnQ0VBQ0lBQkFRVUlDaGVzSW9ERUFRY0xIQmdxZ1FCYzBBQWdCT0FHaEFVeEJFQXJFS0lZSUlvQmxFUndnSUFFUUpBQkFGSUlBa0lRSUJBTUJENEJoZ0lCQUIyZ0RBUUFBQVVBUUFtaEVBaEFKQUtKUUFVQkF5SUdFQVFMUndZRjBGRUFBaEVNQUJ3UVFNUU1BS1FBRGdJU2k1WUFJZ0lsQUVBZ1F4RWhFUW1rb2dRZ2dBQWdBUUFBaEVpZ0VoQ2dRUU5nQUdZY0FCUUFNb0RiUUFEdGdFR0FBVEsyRUFRQ0trQklJQkFKcUVDVFFFQUVBRFpCQUlnTURBQ1N3dUJCN0NFTW9LQUFrSVhBSU9BQUFKVGtoRkFhVkFnb3dSQVlFb29tQ29TSUFFQWdBRE1KTEFnc0FCSlVnQW9VQkFnS0NrQWFDbkxCTWdFWUNCZ2lFUUFBQkVCUlFEUUFBSkdva2tBQ0FJRzlFaUlBc1NLZ3NDbUFRQUNDQUVJQUJBWUNJRUlzSVFBaENBVGlBcVRBUks3MkFsQUFQUkFoWUlKQUZBcklVQXNRQWtnSWdBQUVnQ0FrQUNnaUFFTVJVbGdCQ2RBQ2dBS0FKRUdCSkFBTUFTQUlBeUlDZ0lFM0JqRkNvSTRDRkJrWUFnU0djRUtBTXpTTUFRUVFHTU1BQkNPQnVJUWdFQkFpQXlJSUFrQkFBQmI2WVZTcEFCQndJQUV3amdpQUNBQkFuZ09BQ0pJZGdtQXBHMFJBS21Jb0hRQk1NQUVFZ1lBRUVBRE9nUXdKWUVDQUFFSWdoR0VEQ0dMT0FFNFZaZ0FBTW9paUErRkF3UUVtSUVEQ2dBQVJCQUFCQVVNVE1HQkFRS0ZKZ0lDQ1JSc0lBU2dnTUFoQ0VBQkVBQUNGQUJBcEFBeUJBSUFJRT0IAAYAAAAACAAHAAAAAAAA',
             "cursor": self.__cursor,
             "includePromotedContent":True,
             "withQuickPromoteEligibilityTweetFields":True,
@@ -292,6 +289,8 @@ class X:
             
             if (self.__filter_urls(response.json()) or response.status_code != 200): break
 
+            logging.info(response)
+
             with tqdm(total=len(self.__media_urls), desc="Downloading", unit="file", ascii=True) as progress_bar:                
                 with ThreadPoolExecutor() as executor:
                     executor.map(lambda url: self.__download_wrapper(url, progress_bar), self.__media_urls)
@@ -301,12 +300,13 @@ class X:
 # testing
 if(__name__ == '__main__'):
     load_dotenv() 
-    cookie = os.getenv("cookie") 
+    cookie = os.getenv("COOKIE") 
     start = perf_counter()
     x: X = X(cookie)
     # x.get_by_username('amortentia0213')
     # x.get_by_username('djtHobbies')
-    x.search('Freya_JKT48')
+    # x.search('Freya_JKT48')
+    x.search('prabowo')
     # x.get_by_username('sixtysixhistory')
     # x.get_by_username('Freya_JKT48')
     # x.get_by_username('N_ShaniJKT48')
